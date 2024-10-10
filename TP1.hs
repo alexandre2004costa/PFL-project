@@ -20,7 +20,7 @@ cities ((c1,c2,d):xs) = Data.List.nub $ c1 : c2 : cities xs
 areAdjacent :: RoadMap -> City -> City -> Bool --Dont know if order matters here, so i just check both ways
 areAdjacent rm c1 c2 = any (\(city1,city2,dist) -> (city1 == c1 && city2 == c2) || (city2 == c1 && city1 == c2)) rm
 
-distance :: RoadMap -> City -> City -> Maybe Distance
+distance :: RoadMap -> City -> City -> Maybe Distance --Can change to recurssion also
 distance [] c1 c2 = Nothing
 distance rm c1 c2
     |dist > 0 = Just dist
@@ -28,10 +28,17 @@ distance rm c1 c2
         where dist = sum [d | (city1,city2,d) <- rm , (city1 == c1 && city2 == c2) || (city2 == c1 && city1 == c2)]
 
 adjacent :: RoadMap -> City -> [(City,Distance)]
-adjacent = undefined
+adjacent [] city = []
+adjacent ((c1,c2,d):xs) city
+    |c1 == city = (c2,d) : adjacent xs city
+    |otherwise = adjacent xs city
 
-pathDistance :: RoadMap -> Path -> Maybe Distance
-pathDistance = undefined
+pathDistance :: RoadMap -> Path -> Maybe Distance --uncompleted
+pathDistance [x] (city1:city2:ps) = Nothing
+pathDistance ((c1,c2,d):xs) [city1:city2] = if (c1,c2) == (city1,city2) then d else Nothing
+pathDistance ((c1,c2,d):xs) (city1:city2:ps)
+    |(c1,c2) == (city1,city2) = d + pathDistance xs (city2:ps)
+    |otherwise = Nothing
 
 rome :: RoadMap -> [City]
 rome = undefined
