@@ -1,4 +1,4 @@
---import qualified Data.List
+import qualified Data.List
 --import qualified Data.Array
 --import qualified Data.Bits
 
@@ -9,17 +9,23 @@
 type City = String
 type Path = [City]
 type Distance = Int
-
-type RoadMap = [(City,City,Distance)]
+type Edge = (City,City,Distance)
+type RoadMap = [Edge]
 
 cities :: RoadMap -> [City]
-cities = undefined -- modifiy this line to implement the solution, for each exercise not solved, leave the function definition like this
+cities [] = []
+cities ((c1,c2,d):xs) = Data.List.nub $ c1 : c2 : cities xs
+    
 
-areAdjacent :: RoadMap -> City -> City -> Bool
-areAdjacent = undefined
+areAdjacent :: RoadMap -> City -> City -> Bool --Dont know if order matters here, so i just check both ways
+areAdjacent rm c1 c2 = any (\(city1,city2,dist) -> (city1 == c1 && city2 == c2) || (city2 == c1 && city1 == c2)) rm
 
 distance :: RoadMap -> City -> City -> Maybe Distance
-distance = undefined
+distance [] c1 c2 = Nothing
+distance rm c1 c2
+    |dist > 0 = Just dist
+    |otherwise = Nothing
+        where dist = sum [d | (city1,city2,d) <- rm , (city1 == c1 && city2 == c2) || (city2 == c1 && city1 == c2)]
 
 adjacent :: RoadMap -> City -> [(City,Distance)]
 adjacent = undefined
