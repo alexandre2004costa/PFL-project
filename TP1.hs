@@ -14,8 +14,9 @@ type RoadMap = [Edge]
 
 cities :: RoadMap -> [City]
 cities [] = []
-cities ((c1,c2,d):xs) = Data.List.nub $ c1 : c2 : cities xs
-    
+cities rm = Data.List.nub $ allCities rm
+    where allCities ((c1,c2,d):xs) = c1 : c2 : cities xs
+
 
 areAdjacent :: RoadMap -> City -> City -> Bool --Dont know if order matters here, so i just check both ways
 areAdjacent rm c1 c2 = any (\(city1,city2,dist) -> (city1 == c1 && city2 == c2) || (city2 == c1 && city1 == c2)) rm
@@ -30,18 +31,25 @@ distance rm c1 c2
 adjacent :: RoadMap -> City -> [(City,Distance)]
 adjacent [] city = []
 adjacent ((c1,c2,d):xs) city
-    |c1 == city = (c2,d) : adjacent xs city
-    |otherwise = adjacent xs city
+    | c1 == city = (c2,d) : adjacent xs city
+    | c2 == city = (c1,d) : adjacent xs city
+    | otherwise = adjacent xs city
 
-pathDistance :: RoadMap -> Path -> Maybe Distance --uncompleted
-pathDistance [x] (city1:city2:ps) = Nothing
-pathDistance ((c1,c2,d):xs) [city1:city2] = if (c1,c2) == (city1,city2) then d else Nothing
-pathDistance ((c1,c2,d):xs) (city1:city2:ps)
-    |(c1,c2) == (city1,city2) = d + pathDistance xs (city2:ps)
-    |otherwise = Nothing
+--pathDistance :: RoadMap -> Path -> Maybe Distance --uncompleted
+--pathDistance [x] (city1:city2:ps) = Nothing
+--pathDistance ((c1,c2,d):xs) [city1:city2] = if (c1,c2) == (city1,city2) then d else Nothing
+--pathDistance ((c1,c2,d):xs) (city1:city2:ps)
+--    |(c1,c2) == (city1,city2) = d + pathDistance xs (city2:ps)
+--    |otherwise = Nothing
+
 
 rome :: RoadMap -> [City]
-rome = undefined
+rome rm = [city | (city, degree) <- degrees, degree == maxDegree]
+    where 
+        degrees = [(city, length (adjacent rm city)) | city <- cities rm]
+        maxDegree = maximum [degree | (_, degree) <- degrees]
+        --maxDegree = foldr (\(_,degree) acc -> max degree acc) 0 degrees
+
 
 isStronglyConnected :: RoadMap -> Bool
 isStronglyConnected = undefined
