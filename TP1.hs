@@ -35,12 +35,14 @@ adjacent ((c1,c2,d):xs) city
     | c2 == city = (c1,d) : adjacent xs city
     | otherwise = adjacent xs city
 
+
 pathDistance :: RoadMap -> Path -> Maybe Distance --Maybe can be optimized, Log (n^2) for now
 pathDistance rm [x] = Just 0
 pathDistance rm (city1:city2:ps) = do
     d  <- distance rm city1 city2
     dp <- pathDistance rm (city2:ps)
     return (d + dp)
+
 
 
 rome :: RoadMap -> [City]
@@ -60,8 +62,8 @@ cityIsStronglyConnected rm cs n
     | length cs == n = False
     | otherwise = cityIsStronglyConnected rm (Data.List.nub adj) (length cs)
     where adj = cs ++ [c | city <- cs, (c,_) <- adjacent rm city]
-
-
+    
+    
 createAllDistances :: RoadMap -> City -> [(City,Distance)] --Used to set all dist to infinite
 createAllDistances [] c = []
 createAllDistances ((c1,c2,d):xs) c
