@@ -45,14 +45,22 @@ adjacent ((c1,c2,d):xs) city
 
 rome :: RoadMap -> [City]
 rome rm = [city | (city, degree) <- degrees, degree == maxDegree]
-    where 
+    where
         degrees = [(city, length (adjacent rm city)) | city <- cities rm]
         maxDegree = maximum [degree | (_, degree) <- degrees]
         --maxDegree = foldr (\(_,degree) acc -> max degree acc) 0 degrees
 
 
 isStronglyConnected :: RoadMap -> Bool
-isStronglyConnected = undefined
+isStronglyConnected rm = cityIsStronglyConnected rm [head (cities rm)] 0
+
+cityIsStronglyConnected :: RoadMap -> [City] -> Int -> Bool
+cityIsStronglyConnected rm cs n
+    | length cs == length (cities rm) = True
+    | length cs == n = False
+    | otherwise = cityIsStronglyConnected rm (Data.List.nub adj) (length cs)
+    where adj = cs ++ [c | city <- cs, (c,_) <- adjacent rm city]
+
 
 shortestPath :: RoadMap -> City -> City -> [Path]
 shortestPath = undefined
