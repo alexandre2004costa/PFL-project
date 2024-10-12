@@ -1,12 +1,12 @@
 import qualified Data.List
---import qualified Data.Array
+import qualified Data.Array
 --import qualified Data.Bits
 
 -- PFL 2024/2025 Practical assignment 1
 
 -- Uncomment the some/all of the first three lines to import the modules, do not change the code of these lines.
 
-type City = String
+type City = String 
 type Path = [City]
 type Distance = Int
 type Edge = (City,City,Distance)
@@ -35,12 +35,14 @@ adjacent ((c1,c2,d):xs) city
     | c2 == city = (c1,d) : adjacent xs city
     | otherwise = adjacent xs city
 
---pathDistance :: RoadMap -> Path -> Maybe Distance --uncompleted
---pathDistance [x] (city1:city2:ps) = Nothing
---pathDistance ((c1,c2,d):xs) [city1:city2] = if (c1,c2) == (city1,city2) then d else Nothing
---pathDistance ((c1,c2,d):xs) (city1:city2:ps)
---    |(c1,c2) == (city1,city2) = d + pathDistance xs (city2:ps)
---    |otherwise = Nothing
+
+pathDistance :: RoadMap -> Path -> Maybe Distance --Maybe can be optimized, Log (n^2) for now
+pathDistance rm [x] = Just 0
+pathDistance rm (city1:city2:ps) = do
+    d  <- distance rm city1 city2
+    dp <- pathDistance rm (city2:ps)
+    return (d + dp)
+
 
 
 rome :: RoadMap -> [City]
@@ -60,10 +62,24 @@ cityIsStronglyConnected rm cs n
     | length cs == n = False
     | otherwise = cityIsStronglyConnected rm (Data.List.nub adj) (length cs)
     where adj = cs ++ [c | city <- cs, (c,_) <- adjacent rm city]
+    
+    
+createAllDistances :: RoadMap -> City -> [(City,Distance)] --Used to set all dist to infinite
+createAllDistances [] c = []
+createAllDistances ((c1,c2,d):xs) c
+    |c1 == c = (c2, maxBound :: Int) : createAllDistances xs c
+    |c2 == c = (c1, maxBound :: Int) : createAllDistances xs c
+    |otherwise = (c1,maxBound :: Int) : (c2, maxBound :: Int) : createAllDistances xs c 
 
+--createAllDistances :: RoadMap -> City -> Array City Distance
+--createAllDistances rm c = array (minCity, maxCity) [(city, maxBound :: Distance) | city <- allCities]
+--  where
+--    allCities = nub $ concat [[c1, c2] | (c1, c2, _) <- rm]  -- Usando 'nub' para evitar duplicatas
+--    minCity = minimum allCities
+--    maxCity = maximum allCities
 
-shortestPath :: RoadMap -> City -> City -> [Path]
-shortestPath = undefined
+shortestPath :: RoadMap -> City -> City -> [(City,Distance)]
+shortestPath rm c1 c2 = undefined
 
 travelSales :: RoadMap -> Path
 travelSales = undefined
