@@ -43,7 +43,7 @@ pathDistance ((c1,c2,d):xs) (city1:city2:ps)
 rome :: RoadMap -> [City]
 rome = undefined
 
-isStronglyConnected :: RoadMap -> Bool
+isStronglyConnected :: RoadMap -> Bool 
 isStronglyConnected = undefined
 
 shortestPath :: RoadMap -> City -> City -> [Path]
