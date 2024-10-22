@@ -9,8 +9,10 @@ import qualified Data.Array
 type City = String 
 type Path = [City]
 type Distance = Int
-type Edge = (City,City,Distance)
+type Edge = (City,City,Distance) -- Podemos definir este Edge ??????????????????
 type RoadMap = [Edge]
+type AdjMatrix = Data.Array.Array (City, City) (Maybe Distance)
+type AdjList = [(City, [(City, Distance)])]
 
 cities :: RoadMap -> [City]
 cities [] = []
@@ -62,24 +64,77 @@ cityIsStronglyConnected rm cs n
     | length cs == n = False
     | otherwise = cityIsStronglyConnected rm (Data.List.nub adj) (length cs)
     where adj = cs ++ [c | city <- cs, (c,_) <- adjacent rm city]
-    
-    
-createAllDistances :: RoadMap -> City -> [(City,Distance)] --Used to set all dist to infinite
-createAllDistances [] c = []
-createAllDistances ((c1,c2,d):xs) c
-    |c1 == c = (c2, maxBound :: Int) : createAllDistances xs c
-    |c2 == c = (c1, maxBound :: Int) : createAllDistances xs c
-    |otherwise = (c1,maxBound :: Int) : (c2, maxBound :: Int) : createAllDistances xs c 
 
---createAllDistances :: RoadMap -> City -> Array City Distance
---createAllDistances rm c = array (minCity, maxCity) [(city, maxBound :: Distance) | city <- allCities]
---  where
---    allCities = nub $ concat [[c1, c2] | (c1, c2, _) <- rm]  -- Usando 'nub' para evitar duplicatas
---    minCity = minimum allCities
---    maxCity = maximum allCities
+createAdjList :: RoadMap -> AdjList -- O(E*V)
+createAdjList rm = foldr addRoad [] rm
+  where
+    addRoad (c1, c2, d) adjList = addNeighbor c1 c2 d (addNeighbor c2 c1 d adjList)
+    addNeighbor city neighbor distance [] = [(city, [(neighbor, distance)])]
+    addNeighbor city neighbor distance ((c, neighbors):rest)
+      | city == c = (c, (neighbor, distance) : neighbors) : rest
+      | otherwise = (c, neighbors) : addNeighbor city neighbor distance rest
 
-shortestPath :: RoadMap -> City -> City -> [(City,Distance)]
-shortestPath rm c1 c2 = undefined
+createAllDistancesArray :: RoadMap -> City -> Data.Array.Array Int (City, Distance)
+createAllDistancesArray rm start = Data.Array.array (0, n - 1) 
+    [(i, (city, if city == start then 0 else maxBound :: Distance)) | (i, city) <- zip [0..] citys]
+    where
+        citys = cities rm  -- A função `cities` deve retornar a lista de cidades
+        n = length citys
+getAdjacentCities :: AdjList -> City -> [(City, Distance)]
+getAdjacentCities [] _ = []
+getAdjacentCities ((c, cd):xs) city
+    | c == city = cd 
+    | otherwise = getAdjacentCities xs city  
+
+compareDistances :: (City, Distance) -> (City, Distance) -> Ordering
+compareDistances (_, d1) (_, d2)
+    | d1 < d2 = LT  
+    | d1 > d2 = GT  
+    | otherwise = EQ 
+
+addToUnvisited :: City -> (City, Distance) -> [(City, City, Distance)] -> [(City, City, Distance)]
+addToUnvisited c (c1, d) [] = [(c, c1, d)]
+addToUnvisited c (c1, d) ((c2, c3, dist) : xs)
+    | dist > d = (c, c1, d) : (c2, c3, dist) : xs  -- Adiciona a nova cidade e mantém as restantes
+    | otherwise = (c2, c3, dist) : addToUnvisited c (c1, d) xs  -- Continua a acumular
+
+getPath :: Data.Array.Array Int (City, Distance) -> City -> City -> [City]
+getPath distances end start =
+    reverse $ go end []
+  where
+    go current path
+      | current == start = start : path
+      | otherwise =
+          let (predecessor, _) = distances Data.Array.! (read current)
+          in go predecessor (current : path)
+
+shortestPath :: RoadMap -> City -> City -> Path
+shortestPath rm start end = reverse $ getPath (dijkstra adjList distances unvisited [start]) end start
+  where
+    adjList = createAdjList rm
+    citys = cities rm
+    n = length citys
+    distances = createAllDistancesArray rm start
+    unvisited = [(start,start, 0)]
+
+    dijkstra :: AdjList -> Data.Array.Array Int (City, Distance) -> [(City,City,Distance)] -> Path -> Data.Array.Array Int (City, Distance)
+    dijkstra _ distances [] visited = distances
+    dijkstra adjList distances ((startCity, closestCity, d) : xs) visited = 
+      let
+          adjacentCities = filter (\(c, _) -> c `notElem` visited) (getAdjacentCities adjList closestCity)
+          unvisitedSorted = foldr (addToUnvisited closestCity) xs adjacentCities
+          newDistances = distances
+          (oldPoint, oldDist) = distances Data.Array.! (read closestCity)
+          (startPoint, startDist) = distances Data.Array.! (read startCity)
+          newDist = startDist + d
+          
+          updatedDistance = if oldDist > newDist
+                            then newDistances Data.Array.// [(read closestCity, (startCity, newDist))]
+                            else newDistances
+      in
+          dijkstra adjList updatedDistance unvisitedSorted (closestCity : visited)
+
+
 
 travelSales :: RoadMap -> Path
 travelSales = undefined
@@ -96,3 +151,6 @@ gTest2 = [("0","1",10),("0","2",15),("0","3",20),("1","2",35),("1","3",25),("2",
 
 gTest3 :: RoadMap -- unconnected graph
 gTest3 = [("0","1",4),("2","3",2)]
+
+--main :: IO ()
+--main = printAdjMatrix $ createAdjMatrix 6 gTest2
