@@ -1,9 +1,7 @@
-{-# OPTIONS_GHC -Wno-overlapping-patterns #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Redundant return" #-}
 import qualified Data.List
 import qualified Data.Array
 --import qualified Data.Bits
+
 
 -- PFL 2024/2025 Practical assignment 1
 
@@ -144,15 +142,19 @@ createAdjMatrix rm = foldl addEdgeMatrix (createEmptyMatrix nCities) rm
     where nCities = length (cities rm)
 
 
+--------------------------------------------------------------------
 minim :: [(Maybe Distance,Path)] -> (Maybe Distance,Path)
 minim [] = (Nothing, [])
 minim [x] = x
-minim (x1:x2:xs) = minim (mini x1 x2:xs)
+minim (x1:x2:xs) = minim ((mini x1 x2):xs)
     where
         mini :: (Maybe Distance,Path) -> (Maybe Distance,Path) -> (Maybe Distance,Path)
-        mini (d1,p1) (d2,p2)
-            | d1 > d2 = (d1,p1)
-            | otherwise = (d2,p2)
+        mini (Nothing, _) (Nothing, _) = (Nothing, []) 
+        mini (Nothing, _) x2 = x2                      
+        mini x1 (Nothing, _) = x1                      
+        mini (Just d1, p1) (Just d2, p2)
+            | d1 < d2 = (Just d1,p1)
+            | otherwise = (Just d2,p2)
 
 -- FALTA LIDAR COM OS CASOS DE NOTHING
 
@@ -177,11 +179,13 @@ travelSales rm = helper city city (tail citiiies)
         matrix = createAdjMatrix rm
         helper :: City -> City -> [City] -> (Maybe Distance,Path)
         helper startPoint i [c] = (outra startPoint i c matrix, [i,c])
-        helper startPoint i xs = (get distance i (head pathh) matrix, i:pathh)
+        helper startPoint i xs = (distance, i:pathh)
             where
-                (distance,pathh) = minim (map (\c -> helper startPoint c (filter (/= c) xs)) xs)
+                (distance,pathh) = minim (map (\(maybeDist, path) -> (get maybeDist i (head path) matrix, path)) lista)
+                lista = map (\c -> helper startPoint c (filter (/= c) xs)) xs
 
 
+--------------------------------------------------------------------
 
 
 tspBruteForce :: RoadMap -> Path
