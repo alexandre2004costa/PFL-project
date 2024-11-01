@@ -1,4 +1,4 @@
-import Debug.Trace (trace)
+
 import qualified Data.List
 import qualified Data.Array
 
@@ -87,18 +87,6 @@ getAdjacentCities ((c, cd):xs) city
     | c == city = cd 
     | otherwise = getAdjacentCities xs city  
 
-compareDistances :: (City, Distance) -> (City, Distance) -> Ordering
-compareDistances (_, d1) (_, d2)
-    | d1 < d2 = LT  
-    | d1 > d2 = GT  
-    | otherwise = EQ 
-
-addToUnvisited :: City -> (City, Distance) -> [(City, City, Distance)] -> [(City, City, Distance)]
-addToUnvisited c (c1, d) [] = [(c, c1, d)]
-addToUnvisited c (c1, d) ((c2, c3, dist) : xs)
-    | dist > d = (c, c1, d) : (c2, c3, dist) : xs  -- Adiciona a nova cidade e mantém as restantes
-    | otherwise = (c2, c3, dist) : addToUnvisited c (c1, d) xs  -- Continua a acumular
-
 getPath ::  Data.Array.Array Int (City, Distance) -> City -> City -> [City]
 getPath distances end start =
     reverse $ go end []
@@ -147,7 +135,7 @@ bubbleUp heap@(MinHeap arr size capacity) index
 extractMin :: MinHeap -> ((City, City, Distance), MinHeap)
 extractMin heap@(MinHeap arr size capacity)
     | size == 0 = error "Heap is empty"  -- Handle underflow
-    | otherwise = trace ("min ele: " ++ show minElement) (minElement, newHeap)
+    | otherwise = (minElement, newHeap)
   where
     minElement = arr Data.Array.! 0  -- O menor elemento está na raiz
     lastElement = arr Data.Array.! (size - 1)  -- O último elemento na heap
@@ -177,48 +165,66 @@ bubbleDown heap@(MinHeap arr size capacity) index
                 then
                     let newArr = arr  Data.Array.// [(index, (minChildCityA, minChildCityB, minChildDist)), (minChildIndex, (parentCityA, parentCityB, parentDist))]
                     in bubbleDown (heap { heapArray = newArr }) minChildIndex
-                else heap -- No need to swap; heap is in correct order
+                else heap 
             
-    | otherwise = heap  -- No children, so we're done
+    | otherwise = heap  
+    
+relaxAdjacentCities :: City -> Distance -> MinHeap -> AdjList -> [City] -> MinHeap
+relaxAdjacentCities currentCity currentDist heap adjList visited =
+        foldr (\(adjCity, dist) h ->
+                  if adjCity `notElem` visited  -- Checking if city have already been visited
+                  then
+                      let newDist = currentDist + dist
+                          shouldInsert = case findMinForCity h adjCity of 
+                              Nothing -> True  -- adjCity not in heap
+                              Just (_, _, existingDist) -> newDist < existingDist
+                      in if shouldInsert
+                         then insert h (currentCity, adjCity, newDist)
+                         else h
+                  else h  -- Se adjCity foi visitada, ignora
+              ) heap (getAdjacentCities adjList currentCity)
 
-instance Show MinHeap where
-    show (MinHeap arr size capacity) =
-        "MinHeap: [Size: " ++ show size ++ ", Capacity: " ++ show capacity ++ ", Elements: " ++ show (elems arr) ++ "]"
-        where
-            elems a = [a Data.Array.! i | i <- [0 .. size - 1]]  -- Extraímos apenas os elementos válidos
-
-
+findMinForCity :: MinHeap -> City -> Maybe (City, City, Distance)
+findMinForCity (MinHeap arr size _) targetCity = 
+    let elements = [arr Data.Array.! i | i <- [0..size-1]]
+    in foldr 
+        (\(startCity, city, dist) acc -> 
+            if city == targetCity 
+            then case acc of 
+                    Nothing -> Just (startCity, city, dist)  -- Primeira ocorrência da cidade
+                    Just (_, _, existingDist) -> if dist < existingDist 
+                                                 then Just (startCity, city, dist) 
+                                                 else acc
+            else acc
+        ) 
+        Nothing 
+        elements
 shortestPath :: RoadMap -> City -> City -> Path
-shortestPath rm start end = reverse $ getPath (dijkstra adjList distances heap [start]) end start
-
+shortestPath rm start end = reverse $ getPath (dijkstra adjList heap distances []) end start
   where
     adjList = createAdjList rm
     distances = createAllDistancesArray rm start
-    heap = insert (createHeap 100) (start, start, 0)  -- Initial capacity for the heap
+    heap = insert (createHeap 100) (start, start, 0) -- 100 edges of capacity
 
-    dijkstra :: AdjList -> Data.Array.Array Int (City, Distance) -> MinHeap -> [City] -> Data.Array.Array Int (City, Distance)
-    dijkstra adjList distances heap visited
-        | size heap == 0 = trace ("Heap is empty") distances
+    dijkstra :: AdjList -> MinHeap -> Data.Array.Array Int (City, Distance) -> [City] -> Data.Array.Array Int (City, Distance)
+    dijkstra adjList heap distances visited
+        | size heap == 0 = distances  -- Empty heap, end of search
         | otherwise =
-        let
+            let
+                ((startCity, closestCity, d), newHeap) = extractMin heap -- Closest edge
+                (_, oldDist) = distances Data.Array.! (read closestCity)
+                (_, startDist) = distances Data.Array.! (read startCity)
+                newDist = startDist + d
+                updatedDistance = if oldDist > newDist
+                                    then distances Data.Array.// [(read closestCity, (startCity, newDist))]
+                                    else distances
 
-            -- Extract the closest city from the heap
-            ((startCity, closestCity, d), newHeap) = trace ("Current Heap: " ++ show heap) extractMin heap
-            adjacentCities = filter (\(c, _) -> c `notElem` visited) (getAdjacentCities adjList closestCity)
-            
-            -- Insert adjacent cities into the heap
-            updatedHeap = trace (" Visited: " ++ show (closestCity : visited)) foldr (\(city, dist) h -> insert h (closestCity, city, dist)) newHeap adjacentCities
-            
-            newDistances =  distances
-            (oldPoint, oldDist) = distances Data.Array.! (read closestCity)
-            (startPoint, startDist) = distances Data.Array.! (read startCity)
-            newDist = startDist + d
-            
-            updatedDistance = if oldDist > newDist
-                                then newDistances Data.Array.// [(read closestCity, (startCity, newDist))]
-                                else newDistances
-        in
-            trace ("!!!!C,C,D: " ++ show startCity ++ show closestCity ++ show d ++ "---" ++ show updatedDistance)dijkstra adjList updatedDistance updatedHeap (closestCity : visited)
+                updatedHeap = relaxAdjacentCities closestCity d newHeap adjList visited
+            in
+                if closestCity == end
+                    then distances  -- Found the end
+                    else dijkstra adjList updatedHeap updatedDistance (closestCity:visited)
+
 
 
 
