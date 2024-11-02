@@ -23,9 +23,10 @@ type AdjList = [(City, [(City, Distance)])]
 cities :: RoadMap -> [City]
 cities [] = []
 cities rm = Data.List.nub $ allCities rm
-    where allCities ((c1,c2,d):xs) = c1 : c2 : cities xs
+    where 
+        allCities [] = []
+        allCities ((c1,c2,_):xs) = c1 : c2 : allCities xs
 ----------------------------------------------------------------------------------------
-
 
 ------------------------------------------- 2 ------------------------------------------
 --Description: Checks if two cities are directly connected in the RoadMap.
@@ -96,13 +97,16 @@ rome rm = [city | (city, degree) <- degrees, degree == maxDegree]
 --rm: The road map of city connections and distances.
 --Details: Uses the helper cityIsStronglyConnected to verify reachability from a starting city.
 isStronglyConnected :: RoadMap -> Bool
-isStronglyConnected rm = cityIsStronglyConnected rm [head (cities rm)] 0
+isStronglyConnected rm 
+    | null allCities = False
+    | otherwise      = cityIsStronglyConnected rm [head allCities] 0
+    where allCities = cities rm
 
 --Description: Recursive helper that attempts to visit all cities in the RoadMap starting from an initial city.
 --Arguments:
 --rm: The road map of city connections and distances.
 --cs: A list of cities currently reachable.
---n: Counter tracking the number of cities he has visited. ?????????
+-- n: Counter for the number of visited cities before, to detect new additions and prevent infinite loops
 cityIsStronglyConnected :: RoadMap -> [City] -> Int -> Bool
 cityIsStronglyConnected rm cs n
     | length cs == length (cities rm) = True
@@ -394,12 +398,17 @@ minim (x1:x2:xs) = minim ((mini x1 x2):xs)
 --Description: This function implements a variant of the Traveling Salesman Problem algorithm, computing the minimum distance for visiting all cities starting from the first city, and returning the distance and the path taken. ?????
 --Arguments:
 --rm: The road map containing city connections and distances.
-travelSales :: RoadMap -> (Maybe Distance,[City]) -- Should be just the path???????????'''
-travelSales rm = helper city city (tail citiess)
+travelSales :: RoadMap -> Path
+travelSales rm
+    | optDist == Nothing = []
+    | otherwise = optPath ++ [city]
+    
     where
         citiess = cities rm
         city = head citiess
         matrix = createAdjMatrix rm
+
+        (optDist, optPath) = helper city city (tail citiess)
         
         helper :: City -> City -> [City] -> (Maybe Distance,Path)
         helper startPoint i [c] = (initialDist startPoint i c matrix, [i,c])
@@ -408,13 +417,7 @@ travelSales rm = helper city city (tail citiess)
                 (distance,pathh) = minim (map (\(dist, path) -> (sumDist dist i (head path) matrix, path)) pathList)
                 pathList = map (\c -> helper startPoint c (filter (/= c) cs)) cs
 ----------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------
 
-tspBruteForce :: RoadMap -> Path
-tspBruteForce = undefined -- only for groups of 3 people; groups of 2 people: do not edit this function
 
 -- Some graphs to test your work
 gTest1 :: RoadMap
@@ -424,4 +427,8 @@ gTest2 :: RoadMap
 gTest2 = [("0","1",10),("0","2",15),("0","3",20),("1","2",35),("1","3",25),("2","3",30)]
 
 gTest3 :: RoadMap -- unconnected graph
-gTest3 = [("0","1",4),("2","3",2), ("1","2",3),("3","0",3)]
+gTest3 = [("0","1",4),("2","3",2)]
+
+
+gTest4 :: RoadMap 
+gTest4 = [("0","1",4),("2","3",2), ("1","2",3),("3","0",3)]
