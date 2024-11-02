@@ -4,11 +4,12 @@ import qualified Data.Array
 
 --import qualified Data.Bits
 
+
 -- PFL 2024/2025 Practical assignment 1
 
 -- Uncomment the some/all of the first three lines to import the modules, do not change the code of these lines.
 
-type City = String 
+type City = String
 type Path = [City]
 type Distance = Int
 type Edge = (City,City,Distance) -- Podemos definir este Edge ??????????????????
@@ -84,10 +85,10 @@ createAllDistancesArray rm start = Data.Array.array (0, n - 1)
 getAdjacentCities :: AdjList -> City -> [(City, Distance)]
 getAdjacentCities [] _ = []
 getAdjacentCities ((c, cd):xs) city
-    | c == city = cd 
-    | otherwise = getAdjacentCities xs city  
+    | c == city = cd
+    | otherwise = getAdjacentCities xs city
 
-getPath ::  Data.Array.Array Int (City, Distance) -> City -> City -> [City]
+getPath :: Data.Array.Array Int (City, Distance) -> City -> City -> [City]
 getPath distances end start =
     reverse $ go end []
   where
@@ -227,8 +228,6 @@ shortestPath rm start end = reverse $ getPath (dijkstra adjList heap distances [
 
 
 
-
-
 createEmptyMatrix :: Int -> AdjMatrix
 createEmptyMatrix size = Data.Array.array ((0, 0), (size - 1, size - 1)) [((c1, c2), Nothing) | c1 <- [0..size-1], c2 <- [0..size-1]]
 
@@ -237,36 +236,52 @@ addEdgeMatrix matrix (c1, c2, dist) = matrix Data.Array.// [((read c1, read c2),
 
 createAdjMatrix :: RoadMap -> AdjMatrix
 createAdjMatrix rm = foldl addEdgeMatrix (createEmptyMatrix nCities) rm
-    where nCities = length (cities rm)
+    where nCities = length (cities rm)
 
 
-minim :: City ->  [(Maybe Distance,Path)] -> (Maybe Distance,Path) -> (Maybe Distance,Path)
-minim i [] (d1, p1) = (d1, p1)
-minim i ((d,p):dp) (d1, p1)  
-    | d < d1 = minim i dp (d,p)
-    | otherwise = minim i dp (d1,p1)
+--------------------------------------------------------------------
+initialDist :: City -> City -> City -> AdjMatrix -> Maybe Distance
+initialDist startPoint i c matrix = do
+    d1 <- matrix Data.Array.! (read startPoint, read c) 
+    d2 <- matrix Data.Array.! (read c, read i) 
+    return (d1 + d2) 
 
-outra :: City -> City -> City -> AdjMatrix -> Maybe Distance
-outra startPoint i c matrix = do
-    d <- matrix Data.Array.! (read startPoint, read c) -- Pegar o valor de Maybe Distance
-    dp <- matrix Data.Array.! (read c, read i) -- Pegar o valor de Maybe Distance
-    return (d + dp) -- Somar os valores e retornar
+sumDist :: Maybe Distance -> City -> City -> AdjMatrix -> Maybe Distance
+sumDist dist i c matrix = do
+    dist <- dist 
+    d <- matrix Data.Array.! (read i, read c) 
+    return (dist + d)  
+
+minim :: [(Maybe Distance,Path)] -> (Maybe Distance,Path)
+minim [] = (Nothing, [])
+minim [x] = x
+minim (x1:x2:xs) = minim ((mini x1 x2):xs)
+    where
+        mini :: (Maybe Distance,Path) -> (Maybe Distance,Path) -> (Maybe Distance,Path)
+        mini (Nothing, _) (Nothing, _) = (Nothing, []) 
+        mini x1 (Nothing, _) = x1
+        mini (Nothing, _) x2 = x2                      
+        mini x1@(Just d1, p1) x2@(Just d2, p2)
+            | d1 < d2 = x1
+            | otherwise = x2
 
 
 travelSales :: RoadMap -> (Maybe Distance,[City])
-travelSales rm = helper city city (tail citiiies)
+travelSales rm = helper city city (tail citiess)
     where
-        citiiies = cities rm
-        city = head citiiies
+        citiess = cities rm
+        city = head citiess
         matrix = createAdjMatrix rm
+        
         helper :: City -> City -> [City] -> (Maybe Distance,Path)
-        helper startPoint i [c] = (outra startPoint i c matrix, [c,i])
-        helper startPoint i xs = (distance, i:pathh)
+        helper startPoint i [c] = (initialDist startPoint i c matrix, [i,c])
+        helper startPoint i cs = (distance, i:pathh)
             where
-                (distance,pathh) = minim startPoint (map (\c -> helper startPoint c (filter (/= c) xs)) xs) (Just 9999,[])
+                (distance,pathh) = minim (map (\(dist, path) -> (sumDist dist i (head path) matrix, path)) pathList)
+                pathList = map (\c -> helper startPoint c (filter (/= c) cs)) cs
 
 
-    
+--------------------------------------------------------------------
 
 tspBruteForce :: RoadMap -> Path
 tspBruteForce = undefined -- only for groups of 3 people; groups of 2 people: do not edit this function
