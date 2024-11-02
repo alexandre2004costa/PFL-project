@@ -17,7 +17,7 @@ type AdjList = [(City, [(City, Distance)])]
 
 
 ------------------------------------------- 1 ------------------------------------------
---Extracts a unique list of all cities present in the RoadMap.
+--Description: Extracts a unique list of all cities present in the RoadMap.
 --Arguments:
 --rm: The road map of city connections and distances.
 cities :: RoadMap -> [City]
@@ -132,9 +132,9 @@ createAdjList rm = foldr addRoad [] rm
 --Arguments:
 --rm: The road map of city connections and distances.
 --start: The starting city.
-createAllDistancesArray :: RoadMap -> City ->  Data.Array.Array Int (City, Distance)
+createAllDistancesArray :: RoadMap -> City ->  Data.Array.Array Int ([City], Distance)
 createAllDistancesArray rm start = Data.Array.array (0, n - 1) 
-    [(i, (city, if i == read start then 0 else maxBound :: Distance)) | (i, city) <- zip [0..] citys]
+    [(i, ([], if i == read start then 0 else maxBound :: Distance)) | (i, city) <- zip [0..] citys]
     where
         citys = Data.List.nub $ cities rm
         n = length citys
@@ -149,24 +149,9 @@ getAdjacentCities ((c, cd):xs) city
     | c == city = cd
     | otherwise = getAdjacentCities xs city
 
---Description: Reconstructs the shortest path from the start city to the end city using the distances array.
---Arguments:
---distances: An array where each element holds a city, the predecessor city on the path, and the distance.
---end: The destination city.
---start: The starting city.
-getPath :: Data.Array.Array Int (City, Distance) -> City -> City -> [City]
-getPath distances end start =
-    reverse $ go end []
-  where
-    go current path
-      | current == start = start : path
-      | otherwise =
-          let (predecessor, _) = distances Data.Array.! (read current)
-          in go predecessor (current : path)
-
 
 data MinHeap = MinHeap {
-    heapArray :: Data.Array.Array Int (City, City, Distance), -- Array to store heap elements
+    heapArray :: Data.Array.Array Int (City, [City], Distance), -- Array to store heap elements
     size :: Int,                                         -- Current number of elements in the heap
     capacity :: Int                                     -- Maximum capacity of the heap
 }
@@ -176,7 +161,7 @@ data MinHeap = MinHeap {
 --capacity: The maximum number of elements the heap can hold.
 createHeap :: Int -> MinHeap
 createHeap capacity = MinHeap {
-    heapArray = Data.Array.array (0, capacity - 1) [ (i, ("", "", maxBound :: Distance)) | i <- [0..capacity - 1]],
+    heapArray = Data.Array.array (0, capacity - 1) [ (i, ("", [], maxBound :: Distance)) | i <- [0..capacity - 1]],
     size = 0,
     capacity = capacity
 }
@@ -184,8 +169,8 @@ createHeap capacity = MinHeap {
 --Description: Adds a city with a given distance to the heap, maintaining the min-heap property.
 --Arguments:
 --heap: The current min-heap.
---newElement: A tuple containing the current city, the adjacent city, and the distance to that city.
-insert :: MinHeap -> (City, City, Distance) -> MinHeap
+--newElement: A tuple containing the current city, the upcoming cities, and the distance to that cities.
+insert :: MinHeap -> (City, [City], Distance) -> MinHeap
 insert heap@(MinHeap arr size capacity) newElement
     | size < capacity = 
         let 
@@ -213,7 +198,7 @@ bubbleUp heap@(MinHeap arr size capacity) index
 --Description: This function extracts the minimum element from the min-heap and returns it along with the new state of the heap.
 --Arguments:
 --heap: The current state of the min-heap.
-extractMin :: MinHeap -> ((City, City, Distance), MinHeap)
+extractMin :: MinHeap -> ((City, [City], Distance), MinHeap)
 extractMin heap@(MinHeap arr size capacity)
     | size == 0 = error "Heap is empty"  -- Handle underflow
     | otherwise = (minElement, newHeap)
@@ -252,85 +237,123 @@ bubbleDown heap@(MinHeap arr size capacity) index
                 else heap 
             
     | otherwise = heap  
-    
---Description: This function relaxes the distances of adjacent cities from the current city, updating the min-heap if a shorter path is found.
+
+--Description: Updates the element at position index in the heap’s array with newValue.
 --Arguments:
---currentCity: The city currently being processed.
---currentDist: The distance from the start city to the current city.
---heap: The current state of the min-heap.
---adjList: The adjacency list representing the graph of cities and distances.
---visited: A list of cities that have already been visited.
+--MinHeap: The current min-heap.
+--index: The index where the value should be updated.
+--newValue: The new tuple (City, [City], Distance) to be placed at the specified index.
+updateAtIndex :: MinHeap -> Int -> (City, [City], Distance) -> MinHeap
+updateAtIndex (MinHeap arr size capacity) index newValue =
+    MinHeap (arr  Data.Array.// [(index, newValue)]) size capacity
+
+--Description: Returns the index of targetCity if it exists in the heap; otherwise, returns Nothing.
+--Arguments:
+--MinHeap: The current min-heap.
+--targetCity: The city we want to locate.
+findCityIndex :: MinHeap -> City -> Maybe Int
+findCityIndex (MinHeap arr size _) targetCity =
+    let elements = [(i, arr  Data.Array.! i) | i <- [0..size-1]]
+    in fmap fst $ Data.List.find (\(_, (city, _, _)) -> city == targetCity) elements  
+
+--Description: For each unvisited adjacent city, calculates a new distance. If this new distance is smaller or equal to the existing distance, the heap is updated.
+--Arguments:
+--currentCity: The current city from which we're attempting to relax paths.
+--currentDist: The accumulated distance to currentCity.
+--MinHeap: The min-heap that will store the updated distances.
+--AdjList: The adjacency list representing the graph.
+--visited: The list of already visited cities, which will be ignored.
 relaxAdjacentCities :: City -> Distance -> MinHeap -> AdjList -> [City] -> MinHeap
 relaxAdjacentCities currentCity currentDist heap adjList visited =
-        foldr (\(adjCity, dist) h ->
-                  if adjCity `notElem` visited  -- Checking if city have already been visited
-                  then
-                      let newDist = currentDist + dist
-                          shouldInsert = case findMinForCity h adjCity of 
-                              Nothing -> True  -- adjCity not in heap
-                              Just (_, _, existingDist) -> newDist < existingDist
-                      in if shouldInsert
-                         then insert h (currentCity, adjCity, newDist)
-                         else h
-                  else h 
-              ) heap (getAdjacentCities adjList currentCity)
-
---Description: This function searches for the minimum distance entry for a given city in the min-heap and returns it if found.
+        foldr (\(adjCity, dist) h' -> 
+            if adjCity `notElem` visited
+            then
+                let newDist = currentDist + dist
+                in case findCityIndex h' adjCity of
+                    Nothing -> insert h' (adjCity, [currentCity], newDist)  -- Primeiro predecessor
+                    Just index ->
+                        let (_, preds, existingDist) = heapArray h' Data.Array.! index
+                        in if newDist < existingDist
+                           then updateAtIndex h' index (adjCity, [currentCity], newDist)  -- Substitui com nova distância e predecessor
+                           else if newDist == existingDist
+                                then updateAtIndex h' index (adjCity, currentCity : preds, existingDist)  -- Adiciona predecessor ao empate
+                                else h'
+            else h'
+        ) heap (getAdjacentCities adjList currentCity)
+    
+--Description: Calls explorePaths to explore all paths while avoiding cycles, returning a list of paths.
 --Arguments:
---heap: The current state of the min-heap.
---targetCity: The city for which the minimum distance is being searched.
-findMinForCity :: MinHeap -> City -> Maybe (City, City, Distance)
-findMinForCity (MinHeap arr size _) targetCity = 
-    let elements = [arr Data.Array.! i | i <- [0..size-1]]
-    in foldr 
-        (\(startCity, city, dist) acc -> 
-            if city == targetCity 
-            then case acc of 
-                    Nothing -> Just (startCity, city, dist) 
-                    Just (_, _, existingDist) -> if dist < existingDist 
-                                                 then Just (startCity, city, dist) 
-                                                 else acc
-            else acc
-        ) 
-        Nothing 
-        elements
+--distances: An array where each entry contains a list of predecessors and the accumulated distance to the city at the corresponding index.
+--start: The starting city of the path.
+--end: The ending city of the path.
+getAllPaths :: Data.Array.Array Int ([City], Distance) -> City -> City -> [[City]]
+getAllPaths distances start end = explorePaths distances start end []
 
---Description: This function computes the shortest path between two cities in a road map using Dijkstra's algorithm.
+--Description: Recursively explores paths from current to end, avoiding cycles by keeping track of visited cities. Returns all possible paths that reach the end city.
+--Arguments:
+--Data.Array.Array Int ([City], Distance): Array where each entry holds a list of predecessor cities and the minimum distance to the city at the corresponding index.
+--current: The current city being explored.
+--end: The target city for paths.
+--visited: List of cities that have been visited along the current path, used to prevent cycles.
+explorePaths :: Data.Array.Array Int ([City], Distance) -> City -> City -> [City] -> [[City]]
+explorePaths distances current end visited
+    | current == end = [(end : visited)] 
+    | otherwise =
+        let (predecessors, _) = distances Data.Array.! read current 
+        in concatMap (\pred -> if pred `elem` visited
+                                 then [] 
+                                 else explorePaths distances pred end (current : visited)) predecessors
+
+--Description: Updates the array with newDistance and closestCities if newDistance is less than the current distance; if it is equal, it adds closestCities to the existing predecessors.
+--Arguments:
+--distances: Array with distances and predecessors for each city.
+--startCity: The city from which the predecessors originate.
+--closestCities: List of the closest predecessor cities.
+--newDistance: The newly calculated distance.    
+updateDistances :: Data.Array.Array Int ([City], Distance) -> City -> [City] -> Distance -> Data.Array.Array Int ([City], Distance)
+updateDistances distances startCity closestCities newDistance =
+    let
+        startIndex = read startCity 
+        (predecessors, existingDistance) = distances Data.Array.! startIndex
+        updatedDistances =
+            if newDistance < existingDistance
+            then distances Data.Array.// [(startIndex, (closestCities, newDistance))]
+            else if newDistance == existingDistance
+                 then distances Data.Array.// [(startIndex, (closestCities ++ predecessors, existingDistance))] 
+                 else distances 
+    in
+        updatedDistances
+
+--Description: This function computes the shortest paths between two cities in a road map using Dijkstra's algorithm.
 --Arguments:
 --rm: The road map containing city connections and distances.
 --start: The starting city.
 --end: The destination city.
-shortestPath :: RoadMap -> City -> City -> Path
-shortestPath rm start end = reverse $ getPath (dijkstra adjList heap distances []) end start
+shortestPath :: RoadMap -> City -> City -> [Path]
+shortestPath rm start end = getAllPaths (dijkstra adjList heap distances []) end start
   where
     adjList = createAdjList rm
     distances = createAllDistancesArray rm start
-    heap = insert (createHeap 100) (start, start, 0) -- 100 edges of capacity
+    heap = insert (createHeap 100) (start, [start], 0) -- 100 edges of capacity
 
     --Description: This is the core function of Dijkstra's algorithm that iteratively extracts the minimum distance node, relaxes its adjacent nodes, and updates the distances in the min-heap until all nodes are processed or the destination is reached.
     --Arguments:
     --adjList: The adjacency list representing the graph.
     --heap: The current state of the min-heap.
-    --distances: An array holding the minimum distances from the start city to each city.
+    --distances: An array holding the minimum distances from the start city to each city and the predecessor cities.
     --visited: A list of cities that have already been visited during the algorithm's execution.
-    dijkstra :: AdjList -> MinHeap -> Data.Array.Array Int (City, Distance) -> [City] -> Data.Array.Array Int (City, Distance)
+    dijkstra :: AdjList -> MinHeap -> Data.Array.Array Int ([City], Distance) -> [City] -> Data.Array.Array Int ([City], Distance)
     dijkstra adjList heap distances visited
         | size heap == 0 = distances  -- Empty heap, end of search
         | otherwise =
             let
-                ((startCity, closestCity, d), newHeap) = extractMin heap -- Closest edge
-                (_, oldDist) = distances Data.Array.! (read closestCity)
-                (_, startDist) = distances Data.Array.! (read startCity)
-                newDist = startDist + d
-                updatedDistance = if oldDist > newDist
-                                    then distances Data.Array.// [(read closestCity, (startCity, newDist))]
-                                    else distances
-
-                updatedHeap = relaxAdjacentCities closestCity d newHeap adjList visited
+                ((startCity, closestCitys, d), newHeap) = extractMin heap 
+                updatedDistance =  updateDistances distances startCity closestCitys d
+                updatedHeap = relaxAdjacentCities startCity d newHeap adjList visited
             in
-                if closestCity == end
-                    then distances  -- Found the end
-                    else dijkstra adjList updatedHeap updatedDistance (closestCity:visited)
+                if startCity == end 
+                    then updatedDistance  -- Found the end
+                    else dijkstra adjList updatedHeap updatedDistance (startCity : visited)
 ----------------------------------------------------------------------------------------
 
 ------------------------------------------- 9 ------------------------------------------
@@ -395,7 +418,7 @@ minim (x1:x2:xs) = minim ((mini x1 x2):xs)
             | d1 < d2 = x1
             | otherwise = x2
 
---Description: This function implements a variant of the Traveling Salesman Problem algorithm, computing the minimum distance for visiting all cities starting from the first city, and returning the distance and the path taken. ?????
+--Description: This function implements a variant of the Traveling Salesman Problem algorithm, computing the minimum distance for visiting all cities starting from the first city, and returning the path taken.
 --Arguments:
 --rm: The road map containing city connections and distances.
 travelSales :: RoadMap -> Path
@@ -432,3 +455,6 @@ gTest3 = [("0","1",4),("2","3",2)]
 
 gTest4 :: RoadMap 
 gTest4 = [("0","1",4),("2","3",2), ("1","2",3),("3","0",3)]
+
+gTest :: RoadMap
+gTest = [("0","1",2),("0","2",1),("2","4",1),("4","5",2),("5","6",2),("3","6",2),("1","3",2), ("6", "7", 2)]
