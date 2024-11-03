@@ -463,43 +463,39 @@ createSubset c set = subsetToInt (filter (/= c) set)
 -- Cria a tabela inicial para o TSP
 createTableMatrix :: Int -> Table
 createTableMatrix n = Data.Array.array ((0, 0), (n - 1, 2^n - 1))
-                      [((city, int_subset), (Just (-1), [])) | city <- [0..n-1], int_subset <- [0 .. (2^n - 1)]]
+                      [((city, int_subset), (Nothing, [])) | city <- [0..n-1], int_subset <- [0 .. (2^n - 1)]]
 
 
 setEntryTable :: AdjMatrix -> Int -> Table -> TableCoord -> TableEntry
-setEntryTable matrix start table (i, int)
-    | intToSubset(int) == [] = (matrix Data.Array.! (i, start), [show i, show start])
-    | otherwise = (dist, (show i) : path)
+setEntryTable matrix start table (i, subint)
+    | subset == [] = (matrix Data.Array.! (i, start), [show i, show start])
+    | otherwise = (dist, (show i):path)
     where
         (dist, path) = minim (map (\(dist, path) -> (sumDist dist (show i) (head path) matrix, path)) pathList)
-        subset = intToSubset int
+
+        subset = intToSubset subint
         eachPath c = table Data.Array.! (c, createSubset c subset)  
         pathList = map eachPath subset
 
 
 -- Função para preencher a tabela
 fillTable :: AdjMatrix -> Table -> Int -> Int -> Table
-fillTable matrix table startCity n = foldl fillEntry table validEntries
+fillTable matrix table startCity n = foldl fillEntry table validSubsets
   where
-    -- Gera todas as combinações de (i, subset)
-    allEntries = [(i, subset) | subset <- [0 .. (2^n - 1)], i <- [0..n-1]]
-    
-    -- Filtra as combinações válidas
-    validEntries = filter isValid allEntries
 
-    removeElement :: Int -> [Int] -> [Int]
-    removeElement x = filter (/= x)
+    allSubsets = [(i, subset) | subset <- [0 .. (2^n - 1)], i <- [0..n-1]]
+    validSubsets = filter isValid allSubsets
 
-    -- Verifica se a combinação é válida
-    isValid (i, subset) 
-        | i == startCity = intToSubset subset == removeElement startCity (intToSubset (2^n - 1))
-        | otherwise = (not (elem i (intToSubset subset)) && not (elem startCity (intToSubset subset)))
+    isValid (i, subint) 
+        | i == startCity  = subset == intToSubset (createSubset startCity (intToSubset (2^n - 1)))
+        | otherwise       = not (elem i subset) && not (elem startCity subset)
+        where subset = intToSubset subint
     
-    -- Preenche a tabela para cada entrada válida
-    fillEntry t (i, subset) =
-      let entry = setEntryTable matrix startCity t (i, subset)
-      in trace ("Filling table entry: " ++ show ((i, intToSubset subset), entry)) $ 
-         t Data.Array.// [((i, subset), entry)]
+    fillEntry t (i, subint) =
+      let entry = setEntryTable matrix startCity t (i, subint)
+      in  t Data.Array.// [((i, subint), entry)]
+      -- PARA TESTES trace ("Filling table entry: " ++ show ((i, intToSubset subint), entry)) $
+         
 
 
 
