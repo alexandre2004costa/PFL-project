@@ -1,7 +1,9 @@
 
 import qualified Data.List
 import qualified Data.Array
---import qualified Data.Bits
+import qualified Data.Bits
+
+import Debug.Trace (trace)
 
 
 -- PFL 2024/2025 Practical assignment 1
@@ -12,8 +14,14 @@ type City = String
 type Path = [City]
 type Distance = Int
 type RoadMap = [(City,City,Distance)]
+--------------------------------------------------------------
 type AdjMatrix = Data.Array.Array (Int, Int) (Maybe Distance)
 type AdjList = [(City, [(City, Distance)])]
+--------------------------------------------------------------
+type TableCoord = (Int, Int)
+type TableEntry = (Maybe Distance, Path)
+type Table = Data.Array.Array TableCoord TableEntry
+
 
 
 ------------------------------------------- 1 ------------------------------------------
@@ -378,17 +386,33 @@ createAdjMatrix rm = foldl addEdgeMatrix (createEmptyMatrix nCities) rm
     where nCities = length (cities rm)
 
 
---Description: This function computes the initial distance from a start city to an intermediate city i through another city c using the adjacency matrix.
+--Description: Converts a bitmask integer to a subset list.
 --Arguments:
---startPoint: The starting city.
---i: The intermediate city.
---c: The city used to calculate the distance.
---matrix: The adjacency matrix.
-initialDist :: City -> City -> City -> AdjMatrix -> Maybe Distance
-initialDist startPoint i c matrix = do
-    d1 <- matrix Data.Array.! (read startPoint, read c) 
-    d2 <- matrix Data.Array.! (read c, read i) 
-    return (d1 + d2) 
+--n: An integer that represents a bitmask, where each bit indicates the presence of a city on the list.
+intToSubset :: Int -> [Int]
+intToSubset n = [i | i <- [0 .. (Data.Bits.finiteBitSize n - 1)], Data.Bits.testBit n i]
+
+--Description: Converts a subset list into a bitmask integer.
+--Arguments:
+--subset: A list of integers representing the cities in the subset.
+subsetToInt :: [Int] -> Int
+subsetToInt subset = foldl Data.Bits.setBit 0 subset
+
+--Description: Creates the subset without a specific city.
+--Arguments:
+--c: An integer representing the city to be removed.
+--set: A list of integers representing the current set of cities.
+createSubset :: Int -> [Int] -> Int
+createSubset c set = subsetToInt (filter (/= c) set)
+
+
+--Description: Creates an empty table to store the results of the dynamic programming solution
+--Arguments:
+--n: The number of cities.
+createTableMatrix :: Int -> Table
+createTableMatrix n = Data.Array.array ((0, 0), (n - 1, 2^n - 1))
+                      [((city, int_subset), (Nothing, [])) | city <- [0..n-1], int_subset <- [0 .. (2^n - 1)]]
+
 
 --Description: This function calculates the total distance from the start city to an intermediate city i through another city c, given a potential distance.
 --Arguments:
@@ -418,28 +442,67 @@ minim (x1:x2:xs) = minim ((mini x1 x2):xs)
             | d1 < d2 = x1
             | otherwise = x2
 
---Description: This function implements a variant of the Traveling Salesman Problem algorithm, computing the minimum distance for visiting all cities starting from the first city, and returning the path taken.
+--Description: Computes and returns the entry (distance and path) for a given city and subset of cities based on the adjacency matrix and table.
+--Arguments:
+--matrix: The adjacency matrix  with the distances between cities.
+--start: An integer representing the starting city.
+--table: The table used for dynamic programming.
+--(i, subint): A coordinate tuple representing the current city and the subset of cities.
+setEntryTable :: AdjMatrix -> Int -> Table -> TableCoord -> TableEntry
+setEntryTable matrix start table (i, subint)
+    | subset == [] = (matrix Data.Array.! (i, start), [show i, show start])
+    | otherwise = (dist, (show i):path)
+    where
+        (dist, path) = minim (map (\(dist, path) -> (sumDist dist (show i) (head path) matrix, path)) pathList)
+
+        subset = intToSubset subint
+        eachPath c = table Data.Array.! (c, createSubset c subset)  
+        pathList = map eachPath subset
+
+
+--Description: Fills the table with the entries for valid city subsets associated with each city.
+--Arguments:
+--matrix: The adjacency matrix with the distances between cities.
+--table: The table used for dynamic programming.
+--start: An integer representing the starting city.
+--n: The number of cities.
+fillTable :: AdjMatrix -> Table -> Int -> Int -> Table
+fillTable matrix table startCity n = foldl fillEntry table validSubsets
+  where
+
+    allSubsets = [(i, subset) | subset <- [0 .. (2^n - 1)], i <- [0..n-1]]
+    validSubsets = filter isValid allSubsets
+
+    isValid (i, subint) 
+        | i == startCity  = subset == intToSubset (createSubset startCity (intToSubset (2^n - 1)))
+        | otherwise       = not (elem i subset) && not (elem startCity subset)
+        where subset = intToSubset subint
+    
+    fillEntry t (i, subint) =
+      let entry = setEntryTable matrix startCity t (i, subint)
+      in  t Data.Array.// [((i, subint), entry)]
+      -- PARA TESTES trace ("Filling table entry: " ++ show ((i, intToSubset subint), entry)) $
+         
+
+--Description: Calculates and returns the optimal path for the Traveling Salesman Problem using dynamic programming.
 --Arguments:
 --rm: The road map containing city connections and distances.
-travelSales :: RoadMap -> Path
-travelSales rm
+travelSales2 :: RoadMap -> Path
+travelSales2 rm
     | optDist == Nothing = []
-    | otherwise = optPath ++ [city]
-    
-    where
-        citiess = cities rm
-        city = head citiess
-        matrix = createAdjMatrix rm
+    | otherwise = optPath
 
-        (optDist, optPath) = helper city city (tail citiess)
-        
-        helper :: City -> City -> [City] -> (Maybe Distance,Path)
-        helper startPoint i [c] = (initialDist startPoint i c matrix, [i,c])
-        helper startPoint i cs = (distance, i:pathh)
-            where
-                (distance,pathh) = minim (map (\(dist, path) -> (sumDist dist i (head path) matrix, path)) pathList)
-                pathList = map (\c -> helper startPoint c (filter (/= c) cs)) cs
+    where 
+        allCities = cities rm
+        startCity = head allCities
+        matrix = createAdjMatrix rm
+        emptyTable = createTableMatrix (length allCities)
+
+        startInt = read startCity
+        table = fillTable matrix emptyTable startInt (length allCities)
+        (optDist, optPath) = table Data.Array.! (startInt, createSubset startInt [read c | c <- allCities])  
 ----------------------------------------------------------------------------------------
+
 
 
 -- Some graphs to test your work
@@ -458,3 +521,7 @@ gTest4 = [("0","1",4),("2","3",2), ("1","2",3),("3","0",3)]
 
 gTest :: RoadMap
 gTest = [("0","1",2),("0","2",1),("2","4",1),("4","5",2),("5","6",2),("3","6",2),("1","3",2), ("6", "7", 2)]
+
+gTest5 :: RoadMap 
+gTest5 = [("0","1",5), ("1","2",6), ("2","0",3)]
+
