@@ -480,8 +480,7 @@ fillTable matrix table startCity n = foldl fillEntry table validSubsets
     
     fillEntry t (i, subint) =
       let entry = setEntryTable matrix startCity t (i, subint)
-      in  t Data.Array.// [((i, subint), entry)]
-      -- PARA TESTES trace ("Filling table entry: " ++ show ((i, intToSubset subint), entry)) $
+      in t Data.Array.// [((i, subint), entry)]
          
 
 --Description: Calculates and returns the optimal path for the Traveling Salesman Problem using dynamic programming.
@@ -514,14 +513,3 @@ gTest2 = [("0","1",10),("0","2",15),("0","3",20),("1","2",35),("1","3",25),("2",
 
 gTest3 :: RoadMap -- unconnected graph
 gTest3 = [("0","1",4),("2","3",2)]
-
-{-
-gTest4 :: RoadMap 
-gTest4 = [("0","1",4),("2","3",2), ("1","2",3),("3","0",3)]
-
-gTest :: RoadMap
-gTest = [("0","1",2),("0","2",1),("2","4",1),("4","5",2),("5","6",2),("3","6",2),("1","3",2), ("6", "7", 2)] -- ("3", "7", 1)
-
-gTest5 :: RoadMap 
-gTest5 = [("0","1",5), ("1","2",6), ("2","0",3)]
--}
