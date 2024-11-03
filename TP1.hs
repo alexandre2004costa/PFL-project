@@ -469,8 +469,9 @@ createTableMatrix n = Data.Array.array ((0, 0), (n - 1, 2^n - 1))
 setEntryTable :: AdjMatrix -> Int -> Table -> TableCoord -> TableEntry
 setEntryTable matrix start table (i, int)
     | intToSubset(int) == [] = (matrix Data.Array.! (i, start), [show i, show start])
-    | otherwise = minim (map (\(dist, path) -> (sumDist dist (show i) (head path) matrix, path)) pathList)
+    | otherwise = (dist, (show i) : path)
     where
+        (dist, path) = minim (map (\(dist, path) -> (sumDist dist (show i) (head path) matrix, path)) pathList)
         subset = intToSubset int
         eachPath c = table Data.Array.! (c, createSubset c subset)  
         pathList = map eachPath subset
@@ -501,36 +502,24 @@ fillTable matrix table startCity n = foldl fillEntry table validEntries
          t Data.Array.// [((i, subset), entry)]
 
 
--- Função para imprimir a tabela
-printTable :: Table -> String
-printTable table = concat [show coord ++ " -> " ++ show (table Data.Array.! coord) ++ "\n" | coord <- Data.Array.indices table]
-
-
-
 
 --Description: This function implements a variant of the Traveling Salesman Problem algorithm, computing the minimum distance for visiting all cities starting from the first city, and returning the path taken.
 --Arguments:
 --rm: The road map containing city connections and distances.
 travelSales2 :: RoadMap -> Path
 travelSales2 rm
-    | optDist == Nothing = trace (printTable filledTable) $ []
-    | otherwise = trace (printTable filledTable) $ optPath ++ [startCity]
+    | optDist == Nothing = []
+    | otherwise = optPath
+
     where 
         allCities = cities rm
         startCity = head allCities
         matrix = createAdjMatrix rm
-        table = createTableMatrix (length allCities)
+        emptyTable = createTableMatrix (length allCities)
 
         startInt = read startCity
-
-        -- Preenchendo a tabela usando programação dinâmica
-        filledTable = fillTable matrix table startInt (length allCities)
-
-    
-        (optDist, optPath) = filledTable Data.Array.! (read startCity, createSubset startInt [read c | c <- allCities])  
-        
-        
-        -- getEntryTable matrix startInt table (startInt, createSubset startInt [read c | c <- allCities])
+        table = fillTable matrix emptyTable startInt (length allCities)
+        (optDist, optPath) = table Data.Array.! (startInt, createSubset startInt [read c | c <- allCities])  
 
 
 
