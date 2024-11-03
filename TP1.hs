@@ -406,15 +406,7 @@ createSubset :: Int -> [Int] -> Int
 createSubset c set = subsetToInt (filter (/= c) set)
 
 
---Description: Creates an empty table to store the results of the dynamic programming solution
---Arguments:
---n: The number of cities.
-createTableMatrix :: Int -> Table
-createTableMatrix n = Data.Array.array ((0, 0), (n - 1, 2^n - 1))
-                      [((city, int_subset), (Nothing, [])) | city <- [0..n-1], int_subset <- [0 .. (2^n - 1)]]
-
-
---Description: This function calculates the total distance from the start city to an intermediate city i through another city c, given a potential distance.
+--Description: Calculates the cumulative distance by adding the distance between two cities to a given distance
 --Arguments:
 --dist: The current distance (as a Maybe value).
 --i: The intermediate city.
@@ -442,7 +434,15 @@ minim (x1:x2:xs) = minim ((mini x1 x2):xs)
             | d1 < d2 = x1
             | otherwise = x2
 
---Description: Computes and returns the entry (distance and path) for a given city and subset of cities based on the adjacency matrix and table.
+
+--Description: Creates an empty table to store the results of the dynamic programming solution
+--Arguments:
+--n: The number of cities.
+createTableMatrix :: Int -> Table
+createTableMatrix n = Data.Array.array ((0, 0), (n - 1, 2^n - 1))
+                      [((city, int_subset), (Nothing, [])) | city <- [0..n-1], int_subset <- [0 .. (2^n - 1)]]
+
+--Description: Computes and returns the entry (distance and path) of the table for a given city and subset of cities.
 --Arguments:
 --matrix: The adjacency matrix  with the distances between cities.
 --start: An integer representing the starting city.
@@ -487,8 +487,8 @@ fillTable matrix table startCity n = foldl fillEntry table validSubsets
 --Description: Calculates and returns the optimal path for the Traveling Salesman Problem using dynamic programming.
 --Arguments:
 --rm: The road map containing city connections and distances.
-travelSales2 :: RoadMap -> Path
-travelSales2 rm
+travelSales :: RoadMap -> Path
+travelSales rm
     | optDist == Nothing = []
     | otherwise = optPath
 
@@ -520,7 +520,7 @@ gTest4 :: RoadMap
 gTest4 = [("0","1",4),("2","3",2), ("1","2",3),("3","0",3)]
 
 gTest :: RoadMap
-gTest = [("0","1",2),("0","2",1),("2","4",1),("4","5",2),("5","6",2),("3","6",2),("1","3",2), ("6", "7", 2)]
+gTest = [("0","1",2),("0","2",1),("2","4",1),("4","5",2),("5","6",2),("3","6",2),("1","3",2), ("6", "7", 2)] -- ("3", "7", 1)
 
 gTest5 :: RoadMap 
 gTest5 = [("0","1",5), ("1","2",6), ("2","0",3)]
