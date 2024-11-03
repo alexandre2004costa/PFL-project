@@ -1,7 +1,9 @@
 
 import qualified Data.List
 import qualified Data.Array
---import qualified Data.Bits
+import qualified Data.Bits
+
+import Debug.Trace (trace)
 
 
 -- PFL 2024/2025 Practical assignment 1
@@ -439,7 +441,101 @@ travelSales rm
             where
                 (distance,pathh) = minim (map (\(dist, path) -> (sumDist dist i (head path) matrix, path)) pathList)
                 pathList = map (\c -> helper startPoint c (filter (/= c) cs)) cs
+                
 ----------------------------------------------------------------------------------------
+
+type TableCoord = (Int, Int)
+type TableEntry = (Maybe Distance, Path)
+type Table = Data.Array.Array TableCoord TableEntry
+
+
+-- Converte um inteiro em um subconjunto de cidades
+intToSubset :: Int -> [Int]
+intToSubset n = [i | i <- [0 .. (Data.Bits.finiteBitSize n - 1)], Data.Bits.testBit n i]
+
+-- Converte um subconjunto de cidades em um inteiro
+subsetToInt :: [Int] -> Int
+subsetToInt subset = foldl Data.Bits.setBit 0 subset
+
+createSubset :: Int -> [Int] -> Int
+createSubset c set = subsetToInt (filter (/= c) set)
+
+-- Cria a tabela inicial para o TSP
+createTableMatrix :: Int -> Table
+createTableMatrix n = Data.Array.array ((0, 0), (n - 1, 2^n - 1))
+                      [((city, int_subset), (Just (-1), [])) | city <- [0..n-1], int_subset <- [0 .. (2^n - 1)]]
+
+
+setEntryTable :: AdjMatrix -> Int -> Table -> TableCoord -> TableEntry
+setEntryTable matrix start table (i, int)
+    | intToSubset(int) == [] = (matrix Data.Array.! (i, start), [show i, show start])
+    | otherwise = minim (map (\(dist, path) -> (sumDist dist (show i) (head path) matrix, path)) pathList)
+    where
+        subset = intToSubset int
+        eachPath c = table Data.Array.! (c, createSubset c subset)  
+        pathList = map eachPath subset
+
+
+-- Função para preencher a tabela
+fillTable :: AdjMatrix -> Table -> Int -> Int -> Table
+fillTable matrix table startCity n = foldl fillEntry table validEntries
+  where
+    -- Gera todas as combinações de (i, subset)
+    allEntries = [(i, subset) | subset <- [0 .. (2^n - 1)], i <- [0..n-1]]
+    
+    -- Filtra as combinações válidas
+    validEntries = filter isValid allEntries
+
+    removeElement :: Int -> [Int] -> [Int]
+    removeElement x = filter (/= x)
+
+    -- Verifica se a combinação é válida
+    isValid (i, subset) 
+        | i == startCity = intToSubset subset == removeElement startCity (intToSubset (2^n - 1))
+        | otherwise = (not (elem i (intToSubset subset)) && not (elem startCity (intToSubset subset)))
+    
+    -- Preenche a tabela para cada entrada válida
+    fillEntry t (i, subset) =
+      let entry = setEntryTable matrix startCity t (i, subset)
+      in trace ("Filling table entry: " ++ show ((i, intToSubset subset), entry)) $ 
+         t Data.Array.// [((i, subset), entry)]
+
+
+-- Função para imprimir a tabela
+printTable :: Table -> String
+printTable table = concat [show coord ++ " -> " ++ show (table Data.Array.! coord) ++ "\n" | coord <- Data.Array.indices table]
+
+
+
+
+--Description: This function implements a variant of the Traveling Salesman Problem algorithm, computing the minimum distance for visiting all cities starting from the first city, and returning the path taken.
+--Arguments:
+--rm: The road map containing city connections and distances.
+travelSales2 :: RoadMap -> Path
+travelSales2 rm
+    | optDist == Nothing = trace (printTable filledTable) $ []
+    | otherwise = trace (printTable filledTable) $ optPath ++ [startCity]
+    where 
+        allCities = cities rm
+        startCity = head allCities
+        matrix = createAdjMatrix rm
+        table = createTableMatrix (length allCities)
+
+        startInt = read startCity
+
+        -- Preenchendo a tabela usando programação dinâmica
+        filledTable = fillTable matrix table startInt (length allCities)
+
+    
+        (optDist, optPath) = filledTable Data.Array.! (read startCity, createSubset startInt [read c | c <- allCities])  
+        
+        
+        -- getEntryTable matrix startInt table (startInt, createSubset startInt [read c | c <- allCities])
+
+
+
+    
+
 
 
 -- Some graphs to test your work
@@ -458,3 +554,7 @@ gTest4 = [("0","1",4),("2","3",2), ("1","2",3),("3","0",3)]
 
 gTest :: RoadMap
 gTest = [("0","1",2),("0","2",1),("2","4",1),("4","5",2),("5","6",2),("3","6",2),("1","3",2), ("6", "7", 2)]
+
+gTest5 :: RoadMap 
+gTest5 = [("0","1",5), ("1","2",6), ("2","0",3)]
+
